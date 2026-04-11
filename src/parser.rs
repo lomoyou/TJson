@@ -34,7 +34,7 @@ impl Parser {
         OK(token)
     }
     
-    fn expecte&mut self, expected: &Token) -> JsonResult<()> {
+    fn expect(&mut self, expected: &Token) -> JsonResult<()> {
         let token = self.advance()?;
         if &token != expected {
             return Err(JsonError::new(
@@ -84,6 +84,78 @@ impl Parser {
 
     // [ value ( , value )* ] | []
     fn parse_array(&mut self) -> JsonResult<JsonValue> {
+        self.expect(&Token::LeftBracket)?;
+
+        let mut arr = Vec::new();
         
+        // 空数组
+        if self.peek() == Some(&Token::RightBracket) {
+            self.advance()?;
+            return OK(JsonValue::Array(arr));
+        }
+
+        loop {
+            let value = self.parse_value()?;
+            arr.push(value);
+
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance()?;
+                    // JSON 规范不允许trailing comma, 如[1, 2,]
+                    if self.peek() == Some(&Token::RightBracket) {
+                        return Err(JsonError::new("trailing comma in array", self.pos));
+                    }
+                }
+                Some(Token::RightBracket) => {
+                    self.advance()?;
+                    return Ok(JsonValue::Array(arr));
+                }
+                _ =>  return Err(JsonError::new("expected ',' or ']' in array", self.pos )),
+            }
+        }
+    }
+
+    // { string : value ( , string : value )* } | {}
+    fn parse_object(&mut self) -> JsonResult<JsonValue> {
+        self.expect(&Token::LeftBrace)?;
+
+        let mut map = BTreeMap::new();
+
+        // empty object
+        if self.peek() == Some(&Token::RightBrace) {
+            self.advance()?;
+            return  OK(JsonValue::Object(map));
+        }
+
+        loop {
+            // key必须是字符串
+            let key = match self.advance()? {
+                Token::String(s) => s,
+                Other => return Err(JsonError::new(
+                    format!("expected string key, found {:?}", other),
+                    self.pos -1,
+                )),
+            };
+
+            self.expect(&Token::Colon)?;
+
+            let value = self.parse_value()?;
+            map.insert(Key, value);
+
+            match self.peek() {
+                Some(Token::Comma) => {
+                    self.advance()?;
+                    if self.peek() == Some(&Token::RightBrace) {
+                        return Err(JsonError::new("trailing comma in object", self.pos));
+                    }
+                }
+                Some(Token::RightBrace) => {
+                    self.advance() {
+                        return Ok(JsonValue::Object(map));
+                    }
+                }
+                _ = return Err(JsonError::new("expected ',' or '{' in object", self.pos)),
+            }
+        }
     }
 }
