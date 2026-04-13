@@ -1,6 +1,7 @@
 use crate::error::{JsonError, JsonResult};
-use crate::Lexer::Token;
+use crate::lexer::Token;
 use crate::value::JsonValue;
+use std::collections::BTreeMap;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -18,7 +19,7 @@ impl Parser {
         if self.pos < self.tokens.len() {
             return Err(JsonError::new("unexpected token after json value", self.pos));
         }
-        OK(value)
+        Ok(value)
     }
 
     fn peek(&self) -> Option<&Token> {
@@ -31,14 +32,14 @@ impl Parser {
         }
         let token = self.tokens[self.pos].clone();
         self.pos += 1;
-        OK(token)
+        Ok(token)
     }
     
     fn expect(&mut self, expected: &Token) -> JsonResult<()> {
         let token = self.advance()?;
         if &token != expected {
             return Err(JsonError::new(
-                format!("expected {:?}", expected, token),
+                format!("expected {:?}, found {:?}", expected, token),
                 self.pos - 1,
             ));
         }
@@ -52,21 +53,21 @@ impl Parser {
                 Ok(JsonValue::Null)
             }
             Some(Token::Bool(_)) => {
-                if let Tokem::Bool(b) = self.advance()? {
+                if let Token::Bool(b) = self.advance()? {
                     Ok(JsonValue::Bool(b))
                 } else {
                     unreachable!()
                 }
             }
             Some(Token::Number(_)) => {
-                if let Tokem::Number(n) = self.advance()? {
+                if let Token::Number(n) = self.advance()? {
                     Ok(JsonValue::Number(n))
                 } else {
                     unreachable!()
                 }
             }
             Some(Token::String(_)) => {
-                if let Tokem::String(s) = self.advance()? {
+                if let Token::String(s) = self.advance()? {
                     Ok(JsonValue::String(s))
                 } else {
                     unreachable!()
@@ -91,7 +92,7 @@ impl Parser {
         // 空数组
         if self.peek() == Some(&Token::RightBracket) {
             self.advance()?;
-            return OK(JsonValue::Array(arr));
+            return Ok(JsonValue::Array(arr));
         }
 
         loop {
@@ -124,14 +125,14 @@ impl Parser {
         // empty object
         if self.peek() == Some(&Token::RightBrace) {
             self.advance()?;
-            return  OK(JsonValue::Object(map));
+            return  Ok(JsonValue::Object(map));
         }
 
         loop {
             // key必须是字符串
             let key = match self.advance()? {
                 Token::String(s) => s,
-                Other => return Err(JsonError::new(
+                other => return Err(JsonError::new(
                     format!("expected string key, found {:?}", other),
                     self.pos -1,
                 )),
@@ -140,7 +141,7 @@ impl Parser {
             self.expect(&Token::Colon)?;
 
             let value = self.parse_value()?;
-            map.insert(Key, value);
+            map.insert(key, value);
 
             match self.peek() {
                 Some(Token::Comma) => {
@@ -150,11 +151,10 @@ impl Parser {
                     }
                 }
                 Some(Token::RightBrace) => {
-                    self.advance() {
-                        return Ok(JsonValue::Object(map));
-                    }
+                    self.advance()?;
+                    return Ok(JsonValue::Object(map));
                 }
-                _ = return Err(JsonError::new("expected ',' or '{' in object", self.pos)),
+                _ => return Err(JsonError::new("expected ',' or '}' in object", self.pos)),
             }
         }
     }

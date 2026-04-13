@@ -1,4 +1,4 @@
-use create::error::{JsonError, JsonResult};
+use crate::error::{JsonError, JsonResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -48,7 +48,7 @@ impl Lexer {
                 '"' => self.read_string()?,
                 't'|'f' => self.read_bool()?,
                 'n' => self.read_null()?,
-                '_' | '0'..='9' => self.read_number()?,
+                '-' | '0'..='9' => self.read_number()?,
                 _ => return Err(JsonError::new(
                     format!("unexpected character: '{}'", ch),
                     self.pos,
@@ -73,12 +73,6 @@ impl Lexer {
         self.chars.get(self.pos).copied()
     }
 
-    fn advance(&mut self) -> Option<char> {
-        let ch = self.chars.get(self.pos).copied();
-        self.pos += 1;
-        ch
-    }
-
     fn read_string(&mut self) ->JsonResult<Token> {
         let start = self.pos;
         self.pos += 1;
@@ -93,43 +87,42 @@ impl Lexer {
             let ch = self.chars[self.pos];
             self.pos += 1;
             
-        }
-
-        match ch {
-            '"' => return Ok(Token::String(s)),
-            '\\' => {
-                if self.pos >= self.chars.len() {
-                    return Err(JsonError::new("unterminated escape sequence", self.pos));
-                }
-                let escaped = self.chars[self.pos];
-                self.pos += 1;
-                match escaped {
-                    '"'  => s.push('"'),
-                    '\\' => s.push('\\'),
-                    '/'  => s.push('/'),
-                    'b'  => s.push('\u{0008}'),
-                    'f'  => s.push('\u{000C}'),
-                    'n'  => s.push('\n'),
-                    'r'  => s.push('\r'),
-                    't'  => s.push('\t'),
-                    'u'  => {
-                        let c = self.read_unicode_escape()?;
-                        s.push(c);
+            match ch {
+                '"' => return Ok(Token::String(s)),
+                '\\' => {
+                    if self.pos >= self.chars.len() {
+                        return Err(JsonError::new("unterminated escape sequence", self.pos));
                     }
-                    _ => return Err(JsonError::new(
+                    let escaped = self.chars[self.pos];
+                    self.pos += 1;
+                    match escaped {
+                        '"'  => s.push('"'),
+                        '\\' => s.push('\\'),
+                        '/'  => s.push('/'),
+                        'b'  => s.push('\u{0008}'),
+                        'f'  => s.push('\u{000C}'),
+                        'n'  => s.push('\n'),
+                        'r'  => s.push('\r'),
+                        't'  => s.push('\t'),
+                        'u'  => {
+                            let c = self.read_unicode_escape()?;
+                            s.push(c);
+                        }
+                        _ => return Err(JsonError::new(
                         format!("invalid escape character: '\\{}'", escaped),
                         self.pos - 1,
-                    )),
+                        )),
+                    }
                 }
+                // JSON规范不允许控制字符（U+0000~U+001F）直接出现在字符串中
+                c if c.is_control() => {
+                    return Err(JsonError::new(
+                        format!("control character U+{:04X} in string", c as u32),
+                        self.pos - 1,
+                    ))
+                }
+                c => s.push(c),
             }
-            // JSON规范不允许控制字符（U+0000~U+001F）直接出现在字符串中
-            c if c.is_control() => {
-                return Err(JsonErro::new(
-                    format!("control character U+{:04X} in string", c as u32),
-                    self.pos - 1,
-                ))
-            }
-            c => s.push(c),
         }
     }
 
@@ -221,13 +214,19 @@ impl Lexer {
         if let Some('e' | 'E') = self.peek() {
             num_str.push('e');
             self.pos += 1;
+
+            if let Some('+' | '-') = self.peek() {
+                num_str.push(self.chars[self.pos]);
+                self.pos += 1;
+            }
+
+            self.read_digits_into(&mut num_str)?;
         }
-        self.read_digits_into(&mut num_str)?;
 
         let n: f64 = num_str.parse()
             .map_err(|_| JsonError::new(format!("invalid number: {}", num_str), start))?;
 
-        Ok(Token::Number(n));
+        Ok(Token::Number(n))
     }
 
     fn read_digits_into(&mut self, buf: &mut String) -> JsonResult<()> {
@@ -245,7 +244,7 @@ impl Lexer {
         if self.pos == start {
             return Err(JsonError::new("expected digit", start));
         }
-        OK(())
+        Ok(())
     }
 
     fn read_bool(&mut self) -> JsonResult<Token> {

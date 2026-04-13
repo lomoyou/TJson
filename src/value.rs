@@ -10,12 +10,7 @@ pub enum JsonValue {
     Number(f64),
     String(String),
     Array(Vec<JsonValue>),
-    Object(BTreeMap<String, Value>),
-}
-
-pub struct JsonParser {
-    input: Vec<char>,
-    index: usize,
+    Object(BTreeMap<String, JsonValue>),
 }
 
 impl JsonValue {
@@ -24,7 +19,7 @@ impl JsonValue {
     }
     
     pub fn is_bool(&self) -> bool {
-        matches!(self, JsonValue::bool(_))
+        matches!(self, JsonValue::Bool(_))
     }
 
     pub fn is_number(&self) -> bool {
@@ -52,7 +47,7 @@ impl JsonValue {
 
     pub fn as_f64(&self) -> Option<f64> {
         match self {
-            JsonValue::Number(n) => Some(*b),
+            JsonValue::Number(n) => Some(*n),
             _ => None,
         }
     }
@@ -81,7 +76,7 @@ impl JsonValue {
 
 // value["Key"]访问Object的字段
 impl Index<&str> for JsonValue {
-    type output = JsonValue;
+    type Output = JsonValue;
 
     fn index(&self, key: &str) -> &JsonValue {
         match self {
@@ -93,7 +88,7 @@ impl Index<&str> for JsonValue {
 
 // value[0]访问Array的元素
 impl Index<usize> for JsonValue {
-    type output = JsonValue;
+    type Output = JsonValue;
     
     fn index(&self, index: usize) -> &JsonValue {
         match self {
@@ -125,7 +120,7 @@ impl From<String> for JsonValue {
 
 impl <T: Into<JsonValue>> From<Vec<T>> for JsonValue {
     fn from (v: Vec<T>) -> Self {
-        JsonValue::Array(v.into_ite().map(|x| x.into()).collect())
+        JsonValue::Array(v.into_iter().map(|x| x.into()).collect())
     }
 }
 
